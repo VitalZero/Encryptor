@@ -36,12 +36,12 @@ int main(int argc, char** argv)
 					" \"in file\" \"file with key\" \"out file\"\n" << std::endl;;
 		}
 	}
-	else if(argc == 4)
+	else if(argc == 4)// user typed 3 arguments, everything ok, do the magic
 	{
 		std::string input(argv[1]);
 		std::string key(argv[2]);
 		std::string output(argv[3]);
-		// user typed 3 arguments, everything ok, do the magic (encryption/decryption)
+
 		Encrypt(input, key, output);
 	}
 	else // if there's no arguments or the user typed more than 3 arguments,
@@ -55,44 +55,8 @@ int main(int argc, char** argv)
 
 int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std::string& file_out)
 {
-	bool biggerThan5MB = false; //pending to implement
-
-	// read input file
-	std::ifstream inputFile(file_in, std::ios_base::in | std::ios_base::binary);
-	if(!inputFile.is_open())
-	{
-		std::cerr << "Couldn't open file " << file_in << std::endl;
-		return -1;
-	}
-
-	// go to end of file, get the position in bytes, and store it
-	// the position in bytes will be the file size
-	inputFile.seekg(0, std::ios_base::end);
-	std::streamsize inputFileSize = inputFile.tellg();
-	inputFile.seekg(0, std::ios_base::beg); // go to beggining of file
-
-	if(inputFileSize > (1024*1024) )
-	{
-		std::cout << "File size is " <<
-			inputFileSize/1024/1000 << "," << (inputFileSize/1024)%1000 << " MB... " <<
-			"Activating stream mode." << std::endl;
-
-		biggerThan5MB = true;
-	}
-
-	// if the file is 1 byte in size or is empty, exit
-	if(inputFileSize <= 1)
-	{
-		std::cerr << "File is empty or the size is really small (not worthy)" << std:: endl;
-		return -2;
-	}
-
-	std::string inBuffer;
-	inBuffer.resize(inputFileSize); // buffer to store the whole file contents in memory
-
-	// read the whole file on the buffer
-	inputFile.read((char*)&inBuffer[0], inputFileSize);
-	inputFile.close();
+	const int FileSizeThreshold = 5 * 1024 * 1024;
+	bool biggerThan5MB = false;
 
 	// read key file
 	std::ifstream keyFile(keyFile_in, std::ios_base::in | std::ios_base::binary);
@@ -102,22 +66,45 @@ int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std
 		return -1;
 	}
 
-	// go to end of file, get the position in bytes, and store it
-	// the position in bytes will be the file size
+	// get the file size and store it, to use it as string length
+	// go to beggining of the file and read its contents into a buffer
 	keyFile.seekg(0, std::ios_base::end);
 	std::streamsize keyFileSize = keyFile.tellg();
 	keyFile.seekg(0, std::ios_base::beg); // go to beggining of file
 
-	// buffer to hold the key characters found in the key file
-	// read the key characters on the key buffer variable
 	std::string keyFileBuffer;
 	keyFileBuffer.resize(keyFileSize);
 	keyFile.read( (char*)&keyFileBuffer[0], keyFileSize);
-	keyFile.close();
+	keyFile.close(); //we are done with key file
 
-	// output decryption/encryption
-	std::cout << "\n\tStarting to do the magic" << std::endl;
+	// read input file
+	std::ifstream inputFile(file_in, std::ios_base::in | std::ios_base::binary);
+	if(!inputFile.is_open())
+	{
+		std::cerr << "Couldn't open file " << file_in << std::endl;
+		return -1;
+	}
 
+	// get the file size and store it, to use it as limit to read and write the files (input / output)
+	inputFile.seekg(0, std::ios_base::end);
+	std::streamsize inputFileSize = inputFile.tellg();
+	inputFile.seekg(0, std::ios_base::beg); // go to beggining of file
+
+	// if the file is 1 byte in size or is empty, exit
+	if(inputFileSize <= 1)
+	{
+		std::cerr << "File is empty or the size is really small (not worthy)" << std:: endl;
+		return -2;
+	}
+
+	if(inputFileSize > FileSizeThreshold )
+	{
+		std::cout << "File size is " <<
+			inputFileSize/1024/1000 << "," << (inputFileSize/1024)%1000 << " MB... " <<
+			"Activating stream mode." << std::endl;
+
+		biggerThan5MB = true;
+	}
 	// do the XOR encryption
 	// for each character in the buffer, XOR it using the key characters
 	// use moddulus on the key character array using the key file size to avoid reading outside of array
@@ -125,17 +112,7 @@ int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std
 	//		i = 20 keyFileSize = 8 (8 bytes)
 	//		i % keyFileSize = 4
 	// character in the 5th position of the key array will be use to XOR the buffer character at 21th position
-	// write the result in the same buffer
-	int tick = inputFileSize / 15;
-	std::cout << "Progress: ";
-	for(int i = 0; i < inputFileSize; ++i)
-	{
-		inBuffer[i] = inBuffer[i] ^ keyFileBuffer[i%keyFileSize];
-		if(i % tick == 0)
-		{
-			std::cout << "#";
-		}
-	}
+	// write the result directly to the output files
 
 	// open output file for write
 	std::ofstream outFile(file_out, std::ios_base::out | std::ios_base::binary);
@@ -145,18 +122,36 @@ int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std
 		return -1;
 	}
 
-	// write the whole buffer chunk in the output file
-	// as data was not added or removed, it is the same size as the input file
+	char charBuffer = 0;
+	int tick = inputFileSize / 30;
+
+	if(biggerThan5MB)
+	{
+		std::cout << "Progress: ";
+	}
+
+	// write directly from the input file, to the output file, without storing any buffer or allocating memory
+	// if the app fails or crashes, the output file will be incomplete, not a big deal atm
+	// it should work with files more than 1 GB
 	for(int i = 0; i < inputFileSize; ++i)
 	{
-		outFile.put(inBuffer[i]);
-		if(i % tick == 0)
+		inputFile.get(charBuffer);
+		outFile.put(charBuffer ^ keyFileBuffer[i%keyFileSize]);
+
+		// if the file is bigger than 5MB show some progress bar
+		if(i % tick == 0 && biggerThan5MB)
 		{
 			std::cout << "#";
 		}
 	}
-	std::cout << std::endl;
-	//outFile.write( (char*)&inBuffer[0], inputFileSize);
+
+	if(biggerThan5MB)
+	{
+		std::cout << " 100%!!" << std::endl;
+	}
+
+	// clean up and, we're out!
+	inputFile.close();
 	outFile.close();
 
 	std::cout << "Finished!" << std::endl;
