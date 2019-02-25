@@ -55,10 +55,10 @@ int main(int argc, char** argv)
 
 int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std::string& file_out)
 {
-	bool biggerThan1MB = false;
+	bool biggerThan5MB = false; //pending to implement
+
 	// read input file
 	std::ifstream inputFile(file_in, std::ios_base::in | std::ios_base::binary);
-
 	if(!inputFile.is_open())
 	{
 		std::cerr << "Couldn't open file " << file_in << std::endl;
@@ -77,13 +77,13 @@ int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std
 			inputFileSize/1024/1000 << "," << (inputFileSize/1024)%1000 << " MB... " <<
 			"Activating stream mode." << std::endl;
 
-		biggerThan1MB = true;
+		biggerThan5MB = true;
 	}
 
 	// if the file is 1 byte in size or is empty, exit
 	if(inputFileSize <= 1)
 	{
-		std::cerr << "File is empty or the file is really small (not worthy)" << std:: endl;
+		std::cerr << "File is empty or the size is really small (not worthy)" << std:: endl;
 		return -2;
 	}
 
@@ -149,7 +149,7 @@ int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std
 	// as data was not added or removed, it is the same size as the input file
 	for(int i = 0; i < inputFileSize; ++i)
 	{
-		outFile.put(inBuffer[0]);
+		outFile.put(inBuffer[i]);
 		if(i % tick == 0)
 		{
 			std::cout << "#";
