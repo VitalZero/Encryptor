@@ -14,128 +14,109 @@
  * For decryption:
  * Supply the output file (encrypted), use the key file and the output file will be "raw" again.
  */
-#include <cstdio>
-
 // TODO:
 //Add a command line option to display outputs
+#include <iostream>
+#include <fstream>
+#include <string>
 
-static bool consoleOutput = false;
 
 // function that will encrypt/decrypt the file
-// gets 3 args., input file, key file and output file
-int Encrypt(const char* file_in, const char* keyFile_in, const char* file_out);
+// gets 3 args., input filename, key filename and output filename
+int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std::string& file_out);
 
 int main(int argc, char** argv)
 {
-	// if there's no arguments or the user typed more than 3 arguments, tell user to use help though -h option, exit.
-	if( (argc == 1) || (argc > 3))
-	{
-		printf("\nExecute with %s -h for more information\n", argv[0]);
-		return 0;
-	}
 	// if user uses help, indicate the use of the program, exit.
-	else if(argc == 2)
+	if(argc == 2)
 	{
 		if((argv[1][0] == '-') && (argv[1][1] == 'h'))
 		{
-			printf("\nUso: %s \"in file\" \"file with key\" \"out file\"\n", argv[0]);
-			return 0;
+			std::cout << "\nUso: " << argv[0] <<
+					" \"in file\" \"file with key\" \"out file\"\n" << std::endl;;
 		}
 	}
-	// user typed 3 arguments, everything ok, do the magic (encryption/decryption)
-	Encrypt(argv[1], argv[2], argv[3]);
-
+	else if(argc == 4)
+	{
+		std::string input(argv[1]);
+		std::string key(argv[2]);
+		std::string output(argv[3]);
+		// user typed 3 arguments, everything ok, do the magic (encryption/decryption)
+		Encrypt(input, key, output);
+	}
+	else // if there's no arguments or the user typed more than 3 arguments,
+		 //tell user to use help though -h option, exit.
+	{
+		std::cout << "\nExecute with " << argv[0] <<
+				"-h for more information\n" << std::endl;
+	}
 	return 0;
 }
 
-int Encrypt(const char* file_in, const char* keyFile_in, const char* file_out)
+int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std::string& file_out)
 {
-	//use 3 file pointers, one for input, one for key and other for output
-	FILE* mainFile = nullptr;
-	FILE* keyFile = nullptr;
-	FILE* outFile = nullptr;
-
-	char* inBuffer = nullptr; // buffer to store the whole file contents in memory
-	char key[100]; // buffer to hold the key characters found in the key file **needs some future work**
-	int mainFileSize = 0; // variable to hold the size of the input file size
-
+	bool biggerThan1MB = false;
 	// read input file
-	mainFile = fopen(file_in, "rb");
+	std::ifstream inputFile(file_in, std::ios_base::in | std::ios_base::binary);
 
-	// if can't open for read, close
-	if(mainFile == nullptr)
+	if(!inputFile.is_open())
 	{
-		printf("Couldn't open file %s!", file_in);
+		std::cerr << "Couldn't open file " << file_in << std::endl;
 		return -1;
 	}
 
 	// go to end of file, get the position in bytes, and store it
 	// the position in bytes will be the file size
-	fseek(mainFile, 0, SEEK_END);
-	mainFileSize = ftell(mainFile);
-	rewind(mainFile); // go to beggining of file
+	inputFile.seekg(0, std::ios_base::end);
+	std::streamsize inputFileSize = inputFile.tellg();
+	inputFile.seekg(0, std::ios_base::beg); // go to beggining of file
+
+	if(inputFileSize > (1024*1024) )
+	{
+		std::cout << "File size is " <<
+			inputFileSize/1024/1000 << "," << (inputFileSize/1024)%1000 << " MB... " <<
+			"Activating stream mode." << std::endl;
+
+		biggerThan1MB = true;
+	}
 
 	// if the file is 1 byte in size or is empty, exit
-	if(mainFileSize <= 1)
+	if(inputFileSize <= 1)
 	{
-		printf("File is empty or the file is really small (not worthy)");
+		std::cerr << "File is empty or the file is really small (not worthy)" << std:: endl;
 		return -2;
 	}
 
-	inBuffer = new char[mainFileSize]; // allocate memory for the file content
-
-	if(inBuffer == nullptr)
-	{
-		printf("Couldn't allocate %d bytes of memory", mainFileSize);
-		return -3;
-	}
+	std::string inBuffer;
+	inBuffer.resize(inputFileSize); // buffer to store the whole file contents in memory
 
 	// read the whole file on the buffer
-	fread(inBuffer,sizeof(char), mainFileSize, mainFile);
-
-	if(consoleOutput) //TODO: if this option is enabled, display the file contents
-	{
-		for(int i = 0; i < mainFileSize; i++)
-
-		{
-			putchar(inBuffer[i]);
-		}
-		puts("");
-	}
-
-	fclose(mainFile);
+	inputFile.read((char*)&inBuffer[0], inputFileSize);
+	inputFile.close();
 
 	// read key file
-	keyFile = fopen(keyFile_in, "rb");
-	// if can't open for read, close
-	if(keyFile == nullptr)
+	std::ifstream keyFile(keyFile_in, std::ios_base::in | std::ios_base::binary);
+	if(!keyFile.is_open())
 	{
-		printf("Couldn't open file %s!", keyFile_in);
+		std::cerr << "Couldn't open file " << keyFile_in << std::endl;
 		return -1;
 	}
 
 	// go to end of file, get the position in bytes, and store it
 	// the position in bytes will be the file size
-	fseek(keyFile, 0, SEEK_END);
-	const int keyFileSize = ftell(keyFile);
-	rewind(keyFile); // go to beggining of file
+	keyFile.seekg(0, std::ios_base::end);
+	std::streamsize keyFileSize = keyFile.tellg();
+	keyFile.seekg(0, std::ios_base::beg); // go to beggining of file
 
+	// buffer to hold the key characters found in the key file
 	// read the key characters on the key buffer variable
-	fread(key, sizeof(char), keyFileSize, keyFile);
-
-	if(consoleOutput) //TODO: if this option is enabled, display the file contents
-	{
-		for(int i = 0; i < keyFileSize; i++)
-		{
-			putchar(key[i]);
-		}
-		printf("\nSize: %i", keyFileSize);
-	}
-
-	fclose(keyFile);
+	std::string keyFileBuffer;
+	keyFileBuffer.resize(keyFileSize);
+	keyFile.read( (char*)&keyFileBuffer[0], keyFileSize);
+	keyFile.close();
 
 	// output decryption/encryption
-	puts("\n\tStarting to do the magic\n");
+	std::cout << "\n\tStarting to do the magic" << std::endl;
 
 	// do the XOR encryption
 	// for each character in the buffer, XOR it using the key characters
@@ -145,40 +126,41 @@ int Encrypt(const char* file_in, const char* keyFile_in, const char* file_out)
 	//		i % keyFileSize = 4
 	// character in the 5th position of the key array will be use to XOR the buffer character at 21th position
 	// write the result in the same buffer
-	for(int i = 0; i < mainFileSize; ++i)
+	int tick = inputFileSize / 15;
+	std::cout << "Progress: ";
+	for(int i = 0; i < inputFileSize; ++i)
 	{
-		inBuffer[i] = inBuffer[i] ^ key[i%keyFileSize];
-	}
-
-	if(consoleOutput) //TODO: if this option is enabled, display the file contents
-	{
-		for(int i = 0; i < mainFileSize; i++)
+		inBuffer[i] = inBuffer[i] ^ keyFileBuffer[i%keyFileSize];
+		if(i % tick == 0)
 		{
-			putchar(inBuffer[i]);
+			std::cout << "#";
 		}
-		puts("");
 	}
 
 	// open output file for write
-	outFile = fopen(file_out, "wb");
-	// if can't open, exit
-	if(outFile == nullptr)
+	std::ofstream outFile(file_out, std::ios_base::out | std::ios_base::binary);
+	if(!outFile.is_open())
 	{
-		printf("Couldn't open file %s!", file_out);
+		std::cerr << "Couldn't open file " << file_out << std::endl;
 		return -1;
 	}
 
 	// write the whole buffer chunk in the output file
 	// as data was not added or removed, it is the same size as the input file
-	fwrite(inBuffer, sizeof(char), mainFileSize, outFile);
+	for(int i = 0; i < inputFileSize; ++i)
+	{
+		outFile.put(inBuffer[0]);
+		if(i % tick == 0)
+		{
+			std::cout << "#";
+		}
+	}
+	std::cout << std::endl;
+	//outFile.write( (char*)&inBuffer[0], inputFileSize);
+	outFile.close();
 
-	fclose(outFile);
+	std::cout << "Finished!" << std::endl;
 
-	// clean up the buffer
-	delete[] inBuffer;
-	puts("Finished!");
-
-	// bye bye!!
 	return 0;
 }
 
