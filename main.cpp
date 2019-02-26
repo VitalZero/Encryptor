@@ -14,12 +14,14 @@
  * For decryption:
  * Supply the output file (encrypted), use the key file and the output file will be "raw" again.
  */
-// TODO:
-//Add a command line option to display outputs
+// Plans for the future:
+// 1.- Add a command line option to display outputs
+// 2.- Create a file and a header file, include the key string length into it and compare values, to avoid
+// 		any modification or "hacking"
+
 #include <iostream>
 #include <fstream>
 #include <string>
-
 
 // function that will encrypt/decrypt the file
 // gets 3 args., input filename, key filename and output filename
@@ -42,7 +44,7 @@ int main(int argc, char** argv)
 		std::string key(argv[2]);
 		std::string output(argv[3]);
 
-		Encrypt(input, key, output);
+		return Encrypt(input, key, output);
 	}
 	else // if there's no arguments or the user typed more than 3 arguments,
 		 //tell user to use help though -h option, exit.
@@ -55,10 +57,10 @@ int main(int argc, char** argv)
 
 int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std::string& file_out)
 {
-	const int FileSizeThreshold = 5 * 1024 * 1024;
-	bool biggerThan5MB = false;
+	const int FileSizeThreshold = 5 * 1024 * 1024; // initialize to 5 MB
+	bool biggerThanThreshold = false;
 
-	// read key file
+	// Work on the key file
 	std::ifstream keyFile(keyFile_in, std::ios_base::in | std::ios_base::binary);
 	if(!keyFile.is_open())
 	{
@@ -75,9 +77,10 @@ int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std
 	std::string keyFileBuffer;
 	keyFileBuffer.resize(keyFileSize);
 	keyFile.read( (char*)&keyFileBuffer[0], keyFileSize);
-	keyFile.close(); //we are done with key file
+	keyFile.close();
+	// Done working with tye key file
 
-	// read input file
+	// Work on the input file
 	std::ifstream inputFile(file_in, std::ios_base::in | std::ios_base::binary);
 	if(!inputFile.is_open())
 	{
@@ -103,8 +106,9 @@ int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std
 			inputFileSize/1024/1000 << "," << (inputFileSize/1024)%1000 << " MB... " <<
 			"Activating stream mode." << std::endl;
 
-		biggerThan5MB = true;
+		biggerThanThreshold = true;
 	}
+
 	// do the XOR encryption
 	// for each character in the buffer, XOR it using the key characters
 	// use moddulus on the key character array using the key file size to avoid reading outside of array
@@ -114,7 +118,8 @@ int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std
 	// character in the 5th position of the key array will be use to XOR the buffer character at 21th position
 	// write the result directly to the output files
 
-	// open output file for write
+	// Work on the output file at the same time as the input file
+	// so we can avoid to allocate memory
 	std::ofstream outFile(file_out, std::ios_base::out | std::ios_base::binary);
 	if(!outFile.is_open())
 	{
@@ -125,12 +130,12 @@ int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std
 	char charBuffer = 0;
 	int tick = inputFileSize / 30;
 
-	if(biggerThan5MB)
+	if(biggerThanThreshold)
 	{
 		std::cout << "Progress: ";
 	}
 
-	// write directly from the input file, to the output file, without storing any buffer or allocating memory
+	// write directly from the input file, to the output file, without storing any buffer or allocating extra memory
 	// if the app fails or crashes, the output file will be incomplete, not a big deal atm
 	// it should work with files more than 1 GB
 	for(int i = 0; i < inputFileSize; ++i)
@@ -138,19 +143,19 @@ int Encrypt(const std::string& file_in, const std::string& keyFile_in, const std
 		inputFile.get(charBuffer);
 		outFile.put(charBuffer ^ keyFileBuffer[i%keyFileSize]);
 
-		// if the file is bigger than 5MB show some progress bar
-		if(i % tick == 0 && biggerThan5MB)
+		// if the file is bigger than the threshold, show some kind of neat progress bar
+		if(i % tick == 0 && biggerThanThreshold)
 		{
 			std::cout << "#";
 		}
 	}
 
-	if(biggerThan5MB)
+	if(biggerThanThreshold)
 	{
 		std::cout << " 100%!!" << std::endl;
 	}
 
-	// clean up and, we're out!
+	// Close both files and get out!
 	inputFile.close();
 	outFile.close();
 
